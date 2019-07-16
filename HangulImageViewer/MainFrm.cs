@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace HangulImgViewer
@@ -53,7 +55,11 @@ namespace HangulImgViewer
         }
         private void MnuAbout_Click(object sender, EventArgs e)
         {
-            MessageBox.Show(this, "Hangul Image Viewer 0.1", "About...",
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
+            string version = fvi.FileVersion;
+
+            MessageBox.Show(this, string.Format("Hangul Image Viewer {0}", version), "About...",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -123,21 +129,14 @@ namespace HangulImgViewer
             }
 
             var selBinId = cbImage.Text;
-            var b64 = selectedDoc.GetImageBase64(selBinId);
-            pictureBox.Image = loadFromBase64(b64);
-        }
-
-        private Image loadFromBase64(string base64str)
-        {
+            var stream = selectedDoc.GetImageStream(selBinId);
             try
             {
-                var bytes = Convert.FromBase64String(base64str);
-                var img = Image.FromStream(new MemoryStream(bytes));
-                return img;
+                pictureBox.Image = Image.FromStream(stream);
             }
             catch
             {
-                return pictureBox.ErrorImage;
+                pictureBox.Image = pictureBox.ErrorImage;
             }
         }
 

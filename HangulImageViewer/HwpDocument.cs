@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Xml;
+using hwpx;
 
 namespace HangulImgViewer
 {
@@ -20,14 +21,14 @@ namespace HangulImgViewer
         }
 
         private string hwpPath;
-        private string hmlPath;
-        private XmlDocument hmlDoc;
+        private string xPath;
+        private HwpxDocument xDoc;
 
         public HwpDocument(string hwpPath)
         {
             this.hwpPath = hwpPath;
-            hmlPath = null;
-            hmlDoc = new XmlDocument();
+            xPath = null;
+            xDoc = null;
             State = HwpState.NotOpen;
         }
 
@@ -39,18 +40,19 @@ namespace HangulImgViewer
             if( hwp.Open(hwpPath, "HWP", "") )
             {
                 var tmpName = Path.GetTempFileName();
-                if( hwp.SaveAs(tmpName, "HWPML2X", "") )
+                if( hwp.SaveAs(tmpName, "HWPX", "") )
                 {
-                    hmlPath = tmpName;
                     hwp.Clear("1"); // hwpDiscard: Discard document changes.
 
-                    try
+                    xPath = tmpName;
+                    xDoc = new HwpxDocument(xPath);
+
+                    if(xDoc.Open())
                     {
                         State = HwpState.HmlReady;
-                        hmlDoc.Load(hmlPath);
                         return true;
                     }
-                    catch
+                    else
                     {
                         State = HwpState.ErrHmlLoadFail;
                         return false;
@@ -75,9 +77,11 @@ namespace HangulImgViewer
         /// <returns>Numbers of Image</returns>
         public int GetImageCount()
         {
-            if(State == HwpState.HmlReady && hmlDoc != null)
+            if(State == HwpState.HmlReady && xDoc != null)
             {
-                return hmlDoc.GetElementsByTagName("IMAGE").Count;
+                return xDoc.GetContentItemList()
+                    .Where(item => item.MediaType.StartsWith("image/"))
+                    .Count();
             }
             else
             {
@@ -87,37 +91,31 @@ namespace HangulImgViewer
 
         public string[] GetImageBinaryDataID()
         {
-            return hmlDoc.GetElementsByTagName("IMAGE")
-                .Cast<XmlNode>().Select(e => e.Attributes["BinItem"].Value)
+            return xDoc.GetContentItemList()
+                .Where(item => item.MediaType.StartsWith("image/"))
+                .Select(item => item.ID)
                 .ToArray();
         }
 
-        public string GetImageBase64(string binItemId)
+        public Stream GetImageStream(string itemId)
         {
-            if(binItemId == null)
-            {
-                return "";
-            }
-
-            var find = hmlDoc.GetElementsByTagName("BINDATA")
-                .Cast<XmlNode>().Where(e => binItemId.Equals(e.Attributes["Id"].Value))
-                .FirstOrDefault();
-
-            if(find != null)
-            {
-                return find.InnerText;
-            }
-            else
-            {
-                return "";
-            }
+            var entryName = xDoc.GetContentItemList()
+                .Where(item => item.ID.Equals(itemId))
+                .FirstOrDefault()
+                .HRef;
+            return xDoc.GetEntryStream(entryName);
         }
 
         public void Dispose()
         {
-            if(File.Exists(hmlPath))
+            if(xDoc != null )
             {
-                File.Delete(hmlPath);
+                xDoc.Close();
+            }
+
+            if(File.Exists(xPath))
+            {
+                File.Delete(xPath);
             }
         }
     }
